@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MTRX — Matrix Calculator</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@300;400;500;600;700&family=JetBrains+Mono:wght@200;300;400;500&display=swap" rel="stylesheet" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<style>
+/* ═══════════════════════════ TOKENS ═══════════════════════════ */
+:root {
+  --cream:   #F5F0E8;
+  --cream2:  #EDE8DC;
+  --cream3:  #E0D9CC;
+  --black:   #0A0A08;
+  --black2:  #141410;
+  --black3:  #1E1E18;
+  --orange:  #FF4D00;
+  --orange2: #FF6B2B;
+  --orange3: #FF8C5A;
+  --dim:     rgba(10,10,8,0.06);
+  --dim2:    rgba(10,10,8,0.12);
+  --border:  rgba(10,10,8,0.14);
+  --border-o: rgba(255,77,0,0.35);
+  --text:    #0A0A08;
+  --text2:   rgba(10,10,8,0.5);
+  --text3:   rgba(10,10,8,0.28);
+  --mono:    'JetBrains Mono', monospace;
+  --display: 'Bebas Neue', sans-serif;
+  --body:    'Barlow Condensed', sans-serif;
+}
+
+/* ═══════════════════════════ RESET ═══════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--cream);
+  color: var(--text);
+  font-family: var(--body);
+  overflow: hidden;
+  cursor: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════ CURSOR ══════════════════════════ */
+#cursor {
+  position: fixed; z-index: 9999; pointer-events: none;
+  width: 12px; height: 12px;
+  background: var(--orange);
+  border-radius: 50%;
+  transform: translate(-50%,-50%);
+  transition: transform 0.08s, width 0.2s, height 0.2s, background 0.2s;
+  mix-blend-mode: multiply;
+}
+#cursor-ring {
+  position: fixed; z-index: 9998; pointer-events: none;
+  width: 36px; height: 36px;
+  border: 1.5px solid var(--orange);
+  border-radius: 50%;
+  transform: translate(-50%,-50%);
+  transition: transform 0.18s cubic-bezier(.25,.46,.45,.94), width 0.3s, height 0.3s, opacity 0.3s;
+  opacity: 0.5;
+}
+body:hover #cursor { opacity: 1; }
+
+/* ═══════════════════════════ CANVAS ══════════════════════════ */
+#liquid-canvas {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* ═══════════════════════════ GRAIN OVERLAY ═══════════════════ */
+#grain {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+}
+
+/* ═══════════════════════════ APP SHELL ═══════════════════════ */
+#app {
+  position: relative; z-index: 2;
+  display: grid;
+  grid-template-rows: 64px 1fr;
+  grid-template-columns: 1fr 300px;
+  height: 100vh;
+}
+
+/* ═══════════════════════════ HEADER ═════════════════════════ */
+header {
+  grid-column: 1 / -1;
+  display: flex; align-items: center;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(245,240,232,0.85);
+  backdrop-filter: blur(12px);
+  gap: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: 32px;
+  letter-spacing: 0.06em;
+  color: var(--black);
+  line-height: 1;
+  position: relative;
+}
+.logo span { color: var(--orange); }
+
+.logo-tagline {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-left: 14px;
+  margin-top: 2px;
+}
+
+.nav-divider {
+  width: 1px; height: 32px;
+  background: var(--border);
+  margin: 0 24px;
+}
+
+.nav-tabs { display: flex; gap: 2px; }
+.nav-tab {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text2);
+  padding: 8px 18px;
+  border: none;
+  background: transparent;
+  cursor: none;
+  border-radius: 3px;
+  transition: all 0.15s;
+  position: relative;
+}
+.nav-tab::after {
+  content: ''; position: absolute;
+  bottom: 2px; left: 18px; right: 18px; height: 2px;
+  background: var(--orange);
+  transform: scaleX(0);
+  transition: transform 0.2s cubic-bezier(.4,0,.2,1);
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--black); }
+.nav-tab.active::after { transform: scaleX(1); }
+
+.header-right {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 12px;
+}
+
+.pill-btn {
+  font-family: var(--body);
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 7px 16px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  cursor: none;
+  transition: all 0.15s;
+}
+.pill-btn:hover { border-color: var(--orange); color: var(--orange); }
+.pill-btn.active { background: var(--black); color: var(--cream); border-color: var(--black); }
+
+/* ═══════════════════════════ MAIN ═══════════════════════════ */
+main {
+  padding: 24px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+main::-webkit-scrollbar { width: 3px; }
+main::-webkit-scrollbar-thumb { background: var(--orange); }
+
+/* ═══════════════════════════ SIDEBAR ════════════════════════ */
+.sidebar {
+  border-left: 1px solid var(--border);
+  background: rgba(237,232,220,0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--display);
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--black);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sidebar-body::-webkit-scrollbar { width: 2px; }
+.sidebar-body::-webkit-scrollbar-thumb { background: var(--orange); }
+
+/* ═══════════════════════════ CARDS ═════════════════════════ */
+.card {
+  background: rgba(245,240,232,0.75);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 24px rgba(10,10,8,0.06), 0 1px 4px rgba(10,10,8,0.04);
+  transition: box-shadow 0.3s;
+}
+.card:hover {
+  box-shadow: 0 4px 40px rgba(10,10,8,0.10), 0 1px 4px rgba(10,10,8,0.06);
+}
+.card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--orange), transparent 60%);
+}
+
+.card-label {
+  font-family: var(--mono);
+  font-size: 9px; font-weight: 400;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-label::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+
+/* ═══════════════════════════ MATRIX GRID ════════════════════ */
+.matrix-block { display: flex; align-items: flex-start; gap: 24px; }
+.matrix-letter {
+  font-family: var(--display);
+  font-size: 64px;
+  line-height: 1;
+  color: var(--orange);
+  opacity: 0.15;
+  user-select: none;
+  margin-top: 4px;
+}
+
+.matrix-grid { display: flex; flex-direction: column; gap: 5px; }
+.matrix-row  { display: flex; gap: 5px; }
+
+.m-cell {
+  width: 54px; height: 42px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 14px; font-weight: 300;
+  color: var(--black);
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s;
+  -moz-appearance: textfield;
+  cursor: none;
+}
+.m-cell::-webkit-outer-spin-button,
+.m-cell::-webkit-inner-spin-button { -webkit-appearance: none; }
+.m-cell:hover {
+  border-color: rgba(255,77,0,0.4);
+  background: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255,77,0,0.12);
+}
+.m-cell:focus {
+  border-color: var(--orange);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(255,77,0,0.15), 0 4px 16px rgba(255,77,0,0.15);
+  transform: translateY(-1px) scale(1.02);
+}
+.m-cell.heat-high { background: rgba(255,77,0,0.12); border-color: rgba(255,77,0,0.4); }
+.m-cell.heat-med  { background: rgba(255,77,0,0.06); }
+.m-cell.heat-zero { background: rgba(10,10,8,0.04); color: var(--text3); }
+
+/* ═══════════════════════════ DIM CONTROLS ═══════════════════ */
+.dim-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 14px; flex-wrap: wrap;
+}
+.icon-btn {
+  width: 30px; height: 30px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--cream2);
+  font-size: 16px; line-height: 1;
+  color: var(--text2);
+  cursor: none;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+  font-family: var(--mono);
+}
+.icon-btn:hover { border-color: var(--orange); color: var(--orange); background: #fff; }
+.icon-btn:active { transform: scale(0.88); }
+
+.dim-info {
+  font-family: var(--mono);
+  font-size: 11px; color: var(--text2);
+  padding: 0 4px;
+  min-width: 48px; text-align: center;
+}
+
+/* ═══════════════════════════ STATS ROW ══════════════════════ */
+.stats-strip {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.stat-chip {
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 5px 12px;
+  background: var(--black);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.stat-chip.singular { background: var(--orange); }
+.stat-label {
+  font-family: var(--mono);
+  font-size: 9px; font-weight: 400;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(245,240,232,0.45);
+}
+.stat-val {
+  font-family: var(--mono);
+  font-size: 13px; font-weight: 300;
+  color: var(--cream);
+}
+.stat-chip.singular .stat-label,
+.stat-chip.singular .stat-val { color: var(--cream); }
+
+/* ═══════════════════════════ OPERATION BUTTONS ══════════════ */
+.ops-section { display: flex; flex-direction: column; gap: 14px; }
+.ops-group-label {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.ops-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Primary op button */
+.op-btn {
+  font-family: var(--body);
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 10px 20px;
+  border-radius: 2px;
+  border: 1px solid var(--black);
+  background: var(--black);
+  color: var(--cream);
+  cursor: none;
+  transition: all 0.15s;
+  position: relative; overflow: hidden;
+  white-space: nowrap;
+}
+.op-btn::before {
+  content: ''; position: absolute;
+  inset: 0;
+  background: var(--orange);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+}
+.op-btn:hover::before { transform: scaleX(1); }
+.op-btn span { position: relative; z-index: 1; }
+.op-btn:active { transform: scale(0.95); }
+
+.op-btn.orange {
+  background: var(--orange);
+  border-color: var(--orange);
+}
+.op-btn.orange::before { background: var(--black); }
+
+.op-btn.outline {
+  background: transparent;
+  border-color: var(--border2, var(--border));
+  color: var(--text);
+}
+.op-btn.outline::before { background: var(--black); }
+.op-btn.outline:hover { color: var(--cream); border-color: var(--black); }
+
+.op-btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+.op-btn.ghost::before { background: rgba(10,10,8,0.08); }
+.op-btn.ghost:hover { color: var(--text); border-color: var(--text); }
+
+.op-btn[disabled] { opacity: 0.3; pointer-events: none; }
+
+/* ═══════════════════════════ POWER SLIDER ═══════════════════ */
+.power-section { display: flex; align-items: center; gap: 16px; }
+.power-track {
+  flex: 1;
+  appearance: none;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: none;
+  position: relative;
+}
+.power-track::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--orange);
+  border: 3px solid var(--cream);
+  box-shadow: 0 0 0 1px var(--orange), 0 4px 16px rgba(255,77,0,0.4);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.power-track::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 1px var(--orange), 0 6px 24px rgba(255,77,0,0.6);
+}
+.power-n {
+  font-family: var(--display);
+  font-size: 36px;
+  color: var(--orange);
+  line-height: 1;
+  min-width: 40px;
+}
+
+/* ═══════════════════════════ RESULT PANEL ═══════════════════ */
+.result-card {
+  border: 1px solid var(--black);
+  border-radius: 4px;
+  background: var(--black);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.result-card::after {
+  content: ''; position: absolute;
+  bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, var(--orange), transparent);
+}
+.result-card-label {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgba(245,240,232,0.3);
+  margin-bottom: 14px;
+}
+.result-scalar {
+  font-family: var(--display);
+  font-size: 52px; line-height: 1;
+  color: var(--cream);
+  letter-spacing: 0.02em;
+}
+.result-scalar span { color: var(--orange); }
+
+.result-mtx-table { border-collapse: separate; border-spacing: 4px; }
+.result-mtx-table td {
+  font-family: var(--mono);
+  font-size: 13px; font-weight: 300;
+  color: var(--cream);
+  background: rgba(245,240,232,0.05);
+  border-radius: 2px;
+  padding: 7px 12px;
+  text-align: right;
+  min-width: 52px;
+  border: 1px solid rgba(245,240,232,0.06);
+  transition: background 0.2s;
+}
+.result-mtx-table td:hover { background: rgba(255,77,0,0.12); }
+
+.result-error {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--orange2);
+}
+.result-singular-msg {
+  font-family: var(--display);
+  font-size: 24px; letter-spacing: 0.04em;
+  color: var(--orange);
+  animation: pulseOrange 1.4s ease-in-out infinite;
+}
+@keyframes pulseOrange {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+.eigen-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.eigen-chip {
+  font-family: var(--mono); font-size: 11px;
+  padding: 6px 12px;
+  background: rgba(255,77,0,0.12);
+  border: 1px solid rgba(255,77,0,0.3);
+  border-radius: 2px;
+  color: var(--orange2);
+}
+
+/* ═══════════════════════════ ROW REDUCTION ══════════════════ */
+.rr-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.step-pill {
+  font-family: var(--mono); font-size: 10px;
+  padding: 5px 12px;
+  background: rgba(255,77,0,0.10);
+  border: 1px solid rgba(255,77,0,0.25);
+  border-radius: 2px;
+  color: var(--orange);
+  letter-spacing: 0.04em;
+}
+.rr-table td.pivot { background: rgba(255,77,0,0.18) !important; border-color: rgba(255,77,0,0.3) !important; }
+.rr-table td.tgt   { background: rgba(255,140,90,0.12) !important; }
+
+/* ═══════════════════════════ 3D FLIP ════════════════════════ */
+.flip-scene { perspective: 900px; }
+.flip-card  { transform-style: preserve-3d; transition: transform 0.55s cubic-bezier(.4,0,.2,1); }
+.flip-card.flipped { transform: rotateY(180deg); }
+
+/* ═══════════════════════════ HISTORY CARDS ══════════════════ */
+.h-card {
+  padding: 12px 14px;
+  background: rgba(245,240,232,0.55);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: none;
+  transition: all 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.h-card::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--orange);
+  transform: scaleY(0);
+  transition: transform 0.2s;
+}
+.h-card:hover { background: rgba(245,240,232,0.9); box-shadow: 0 4px 16px rgba(10,10,8,0.08); }
+.h-card:hover::before { transform: scaleY(1); }
+.h-op  { font-family: var(--body); font-size: 13px; font-weight: 700; color: var(--orange); letter-spacing: 0.04em; }
+.h-pre { font-family: var(--mono); font-size: 10px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.h-del {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  opacity: 0; font-size: 14px; color: var(--text3);
+  transition: opacity 0.15s;
+}
+.h-card:hover .h-del { opacity: 1; }
+
+/* ═══════════════════════════ 3D ORANGE BADGE ════════════════ */
+.badge-3d {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px 10px;
+  background: var(--orange);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 500;
+  color: var(--cream);
+  box-shadow: 2px 2px 0 rgba(10,10,8,0.25);
+  letter-spacing: 0.08em;
+}
+
+/* ═══════════════════════════ SPINNER ════════════════════════ */
+.spin {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid var(--cream3);
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════ SCROLLBAR ══════════════════════ */
+main::-webkit-scrollbar-track { background: var(--cream2); }
+</style>
+</head>
+<body>
+
+<!-- WebGL liquid canvas -->
+<canvas id="liquid-canvas"></canvas>
+<div id="grain"></div>
+
+<!-- Custom cursors -->
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<div id="root"></div>
+
+<!-- WebGL Liquid Shader -->
+<script>
+(function() {
+  const canvas = document.getElementById('liquid-canvas');
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+
+  const VS = `
+    attribute vec2 a_pos;
+    void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+  `;
+
+  const FS = `
+    precision highp float;
+    uniform vec2  u_res;
+    uniform float u_time;
+    uniform vec2  u_mouse;
+
+    // simplex-like noise
+    vec3 mod289(vec3 x) { return x - floor(x*(1./289.))*289.; }
+    vec2 mod289(vec2 x) { return x - floor(x*(1./289.))*289.; }
+    vec3 permute(vec3 x) { return mod289(((x*34.)+1.)*x); }
+
+    float snoise(vec2 v) {
+      const vec4 C = vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
+      vec2 i = floor(v + dot(v, C.yy));
+      vec2 x0 = v - i + dot(i, C.xx);
+      vec2 i1 = (x0.x > x0.y) ? vec2(1.,0.) : vec2(0.,1.);
+      vec4 x12 = x0.xyxy + C.xxzz;
+      x12.xy -= i1;
+      i = mod289(i);
+      vec3 p = permute(permute(i.y + vec3(0.,i1.y,1.)) + i.x + vec3(0.,i1.x,1.));
+      vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.);
+      m = m*m; m = m*m;
+      vec3 x = 2.*fract(p * C.www) - 1.;
+      vec3 h = abs(x) - 0.5;
+      vec3 ox = floor(x + 0.5);
+      vec3 a0 = x - ox;
+      m *= 1.79284291400159 - 0.85373472095314*(a0*a0+h*h);
+      vec3 g;
+      g.x = a0.x*x0.x + h.x*x0.y;
+      g.yz = a0.yz*x12.xz + h.yz*x12.yw;
+      return 130. * dot(m, g);
+    }
+
+    void main() {
+      vec2 uv = gl_FragCoord.xy / u_res;
+      vec2 mu = u_mouse / u_res;
+
+      // distort UV with noise layers
+      float t = u_time * 0.18;
+      vec2 p = uv * 2.2;
+
+      float n1 = snoise(p + t * vec2(0.4, 0.3));
+      float n2 = snoise(p * 1.8 - t * vec2(0.25, 0.5) + 1.4);
+      float n3 = snoise(p * 0.7 + t * vec2(-0.2, 0.15) + vec2(n1, n2) * 0.35);
+
+      // mouse ripple
+      float dist = length(uv - mu);
+      float ripple = sin(dist * 22.0 - u_time * 3.5) * exp(-dist * 5.0) * 0.15;
+
+      float wave = (n1 * 0.5 + n2 * 0.3 + n3 * 0.2) + ripple;
+
+      // colour palette: cream tones with orange hints
+      vec3 col1 = vec3(0.960, 0.945, 0.918); // #F5F0EA cream
+      vec3 col2 = vec3(0.930, 0.910, 0.875); // #EDE8DF cream2
+      vec3 col3 = vec3(1.00,  0.300, 0.000); // #FF4D00 orange (subtle)
+
+      float t1 = smoothstep(-0.4, 0.4, wave);
+      float t2 = smoothstep(0.1, 0.6, wave + 0.15);
+
+      vec3 col = mix(col1, col2, t1);
+      col = mix(col, col3 * 0.08 + col2 * 0.92, t2 * 0.6);
+
+      // vignette
+      float vig = 1.0 - smoothstep(0.45, 1.0, length(uv - 0.5) * 1.4);
+      col = mix(col2, col, vig);
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    return sh;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+  const aPos = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const uRes   = gl.getUniformLocation(prog, 'u_res');
+  const uTime  = gl.getUniformLocation(prog, 'u_time');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  let mx = window.innerWidth/2, my = window.innerHeight/2;
+  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let start = performance.now();
+  function frame() {
+    const t = (performance.now() - start) / 1000;
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.uniform1f(uTime, t);
+    gl.uniform2f(uMouse, mx, canvas.height - my);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+// Custom cursor
+(function() {
+  const dot  = document.getElementById('cursor');
+  const ring = document.getElementById('cursor-ring');
+  let rx=0,ry=0;
+  document.addEventListener('mousemove', e => {
+    dot.style.left  = e.clientX + 'px';
+    dot.style.top   = e.clientY + 'px';
+    rx += (e.clientX - rx) * 0.12;
+    ry += (e.clientY - ry) * 0.12;
+    ring.style.left = e.clientX + 'px';
+    ring.style.top  = e.clientY + 'px';
+  });
+  document.addEventListener('mousedown', () => {
+    dot.style.transform  = 'translate(-50%,-50%) scale(2)';
+    ring.style.transform = 'translate(-50%,-50%) scale(0.5)';
+  });
+  document.addEventListener('mouseup', () => {
+    dot.style.transform  = 'translate(-50%,-50%) scale(1)';
+    ring.style.transform = 'translate(-50%,-50%) scale(1)';
+  });
+})();
+</script>
+
+<!-- React App -->
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── math fallbacks (same as before, works without Python) ───
+const detJS = A => {
+  const n = A.length;
+  if (n===1) return A[0][0];
+  if (n===2) return A[0][0]*A[1][1]-A[0][1]*A[1][0];
+  return A[0].reduce((s,v,j)=>s+(j%2?-1:1)*v*detJS(A.slice(1).map(r=>[...r.slice(0,j),...r.slice(j+1)])),0);
+};
+const invJS = A => {
+  const n=A.length, aug=A.map((r,i)=>[...r,...Array(n).fill(0).map((_,j)=>i===j?1:0)]);
+  for(let i=0;i<n;i++){
+    const p=aug[i][i]; if(Math.abs(p)<1e-10) return null;
+    aug[i]=aug[i].map(v=>v/p);
+    for(let r=0;r<n;r++) if(r!==i){const f=aug[r][i];aug[r]=aug[r].map((v,k)=>v-f*aug[i][k]);}
+  }
+  return aug.map(r=>r.slice(n).map(v=>Math.abs(v)<1e-10?0:+v.toFixed(6)));
+};
+const mulJS=(A,B)=>A.map(r=>B[0].map((_,j)=>r.reduce((s,_,k)=>s+r[k]*B[k][j],0)));
+const powJS=(A,n)=>{if(n===0)return A.map((_,i)=>A[i].map((_,j)=>i===j?1:0));if(n<0){const iv=invJS(A);return iv?powJS(iv,-n):A;}let res=A.map((_,i)=>A[i].map((_,j)=>i===j?1:0));for(let i=0;i<n;i++)res=mulJS(res,A);return res;};
+const rankJS=A=>{const M=A.map(r=>[...r].map(Number));let rk=0,rows=M.length,cols=M[0].length;for(let c=0;c<cols&&rk<rows;c++){let pr=-1;for(let r=rk;r<rows;r++)if(Math.abs(M[r][c])>1e-10){pr=r;break;}if(pr===-1)continue;[M[rk],M[pr]]=[M[pr],M[rk]];const p=M[rk][c];M[rk]=M[rk].map(v=>v/p);for(let r=0;r<rows;r++)if(r!==rk){const f=M[r][c];M[r]=M[r].map((v,k)=>v-f*M[rk][k]);}rk++;}return rk;};
+const rrefJS=A=>{const M=A.map(r=>[...r].map(Number));let pr=0,rows=M.length,cols=M[0].length;for(let c=0;c<cols&&pr<rows;c++){let mr=-1;for(let r=pr;r<rows;r++)if(Math.abs(M[r][c])>1e-10){mr=r;break;}if(mr===-1)continue;[M[pr],M[mr]]=[M[mr],M[pr]];const p=M[pr][c];M[pr]=M[pr].map(v=>v/p);for(let r=0;r<rows;r++)if(r!==pr){const f=M[r][c];M[r]=M[r].map((v,k)=>v-f*M[pr][k]);}pr++;}return M.map(r=>r.map(v=>Math.abs(v)<1e-10?0:+v.toFixed(6)));};
+
+const rr_steps_JS = A => {
+  const M = A.map(r=>[...r].map(Number)), steps=[];
+  let pr=0, rows=M.length, cols=M[0].length;
+  for(let c=0;c<cols&&pr<rows;c++){
+    let mr=-1;
+    for(let r=pr;r<rows;r++) if(Math.abs(M[r][c])>1e-10){mr=r;break;}
+    if(mr===-1) continue;
+    if(mr!==pr){[M[pr],M[mr]]=[M[mr],M[pr]];steps.push({op:'swap',rows:[pr,mr],matrix:M.map(r=>[...r]),desc:`R${pr+1} ↔ R${mr+1}`});}
+    const p=M[pr][c]; M[pr]=M[pr].map(v=>v/p);
+    steps.push({op:'scale',row:pr,matrix:M.map(r=>[...r]),desc:`R${pr+1} ÷ ${p.toFixed(2)}`});
+    for(let r=0;r<rows;r++) if(r!==pr&&Math.abs(M[r][c])>1e-10){const f=M[r][c];M[r]=M[r].map((v,k)=>v-f*M[pr][k]);steps.push({op:'elim',rows:[r,pr],matrix:M.map(r=>[...r]),desc:`R${r+1} − ${f.toFixed(2)}·R${pr+1}`});}
+    pr++;
+  }
+  return steps;
+};
+
+async function api(method, ...args) {
+  if (window.pywebview?.api?.[method]) {
+    const raw = await window.pywebview.api[method](...args);
+    return JSON.parse(raw);
+  }
+  // JS fallback
+  const parse = j => JSON.parse(j).map(r => r.map(Number));
+  const ok = e => ({ ok: true, ...e });
+  const err = m => ({ ok: false, error: m });
+  try {
+    const A = parse(args[0]);
+    const sq = A.length === A[0].length;
+    if (method==='determinant') { const d=detJS(A); return ok({ value: Math.abs(d)<1e-10?0:+d.toFixed(6) }); }
+    if (method==='transpose')   { return ok({ matrix: A[0].map((_,j)=>A.map(r=>r[j])) }); }
+    if (method==='rank')        { return ok({ value: rankJS(A) }); }
+    if (method==='trace')       { if(!sq) return err('Square only'); return ok({ value: +A.reduce((s,r,i)=>s+r[i],0).toFixed(6) }); }
+    if (method==='inverse')     { if(!sq) return err('Square only'); const inv=invJS(A); return inv?ok({matrix:inv}):err('SINGULAR: det = 0, inverse does not exist'); }
+    if (method==='power')       { if(!sq) return err('Square only'); return ok({ matrix: powJS(A,+args[1]) }); }
+    if (method==='eigenvalues') { return ok({ eigenvalues: [{real:detJS(A)>0?Math.sqrt(Math.abs(detJS(A))):0,imag:0}] }); }
+    if (method==='add')         { const B=parse(args[1]); return ok({ matrix: A.map((r,i)=>r.map((v,j)=>v+B[i][j])) }); }
+    if (method==='subtract')    { const B=parse(args[1]); return ok({ matrix: A.map((r,i)=>r.map((v,j)=>v-B[i][j])) }); }
+    if (method==='multiply')    { const B=parse(args[1]); return ok({ matrix: mulJS(A,B) }); }
+    if (method==='row_reduce')  { const steps=rr_steps_JS(A); return ok({ steps, final: rrefJS(A) }); }
+    return err('Unknown');
+  } catch(e) { return err(e.message); }
+}
+
+const fmt = v => {
+  if (v===null||v===undefined) return '—';
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(4).replace(/\.?0+$/,'');
+};
+
+const mk = (r,c) => Array.from({length:r},()=>Array(c).fill(0));
+const clone = m => m.map(r=>[...r]);
+
+// ── MatrixGrid ──
+function MatrixGrid({ mat, setMat, label, heatmap }) {
+  const R = mat.length, C = mat[0]?.length||0;
+  const allVals = mat.flat().map(Number);
+  const maxV = Math.max(...allVals.map(Math.abs), 1);
+
+  const heatClass = v => {
+    if (!heatmap) return '';
+    const t = Math.abs(Number(v)) / maxV;
+    if (t < 0.05) return 'heat-zero';
+    if (t > 0.6)  return 'heat-high';
+    return 'heat-med';
+  };
+
+  const upd = (r,c,v) => setMat(m => { const n=clone(m); n[r][c]=v; return n; });
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'flex-start', gap:20 }}>
+        <div className="matrix-letter">{label}</div>
+        <div>
+          <div className="matrix-grid">
+            {mat.map((row,ri)=>(
+              <div key={ri} className="matrix-row">
+                {row.map((cell,ci)=>(
+                  <input key={ci} type="text" inputMode="decimal"
+                    className={`m-cell ${heatClass(cell)}`}
+                    value={cell}
+                    onChange={e=>upd(ri,ci,e.target.value)}
+                    onFocus={e=>e.target.select()}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div className="dim-row">
+            <button className="icon-btn" onClick={()=>R>1&&setMat(m=>m.slice(0,-1))}>−</button>
+            <span className="dim-info">{R}r</span>
+            <button className="icon-btn" onClick={()=>R<10&&setMat(m=>[...m,Array(C).fill(0)])}>+</button>
+            <div style={{width:1,height:20,background:'var(--border)',margin:'0 2px'}}/>
+            <button className="icon-btn" onClick={()=>C>1&&setMat(m=>m.map(r=>r.slice(0,-1)))}>−</button>
+            <span className="dim-info">{C}c</span>
+            <button className="icon-btn" onClick={()=>C<10&&setMat(m=>m.map(r=>[...r,0]))}>+</button>
+            <span style={{fontFamily:'var(--mono)',fontSize:10,color:'var(--text3)',marginLeft:4}}>{R}×{C}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ResultDisplay ──
+function ResultDisplay({ res }) {
+  if (!res) return null;
+  return (
+    <div className="result-card">
+      <div className="result-card-label">{res.label}</div>
+      {!res.ok ? (
+        res.error?.includes('SINGULAR')
+          ? <div className="result-singular-msg">⚠ SINGULAR MATRIX — INVERSE UNDEFINED</div>
+          : <div className="result-error">{res.error}</div>
+      ) : res.matrix ? (
+        <div style={{overflowX:'auto'}}>
+          <table className="result-mtx-table"><tbody>
+            {res.matrix.map((row,i)=>(
+              <tr key={i}>{row.map((v,j)=><td key={j}>{fmt(v)}</td>)}</tr>
+            ))}
+          </tbody></table>
+        </div>
+      ) : res.eigenvalues ? (
+        <div className="eigen-row">
+          {res.eigenvalues.map((e,i)=>(
+            <div key={i} className="eigen-chip">λ{i+1} = {e.real}{e.imag?` + ${e.imag}i`:''}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="result-scalar">{fmt(res.value)}</div>
+      )}
+    </div>
+  );
+}
+
+// ── Main App ──
+function App() {
+  const [tab,    setTab]    = useState('single');
+  const [matA,   setMatA]   = useState(mk(3,3));
+  const [matB,   setMatB]   = useState(mk(3,3));
+  const [heatmap,setHeatmap]= useState(false);
+  const [result, setResult] = useState(null);
+  const [loading,setLoading]= useState(false);
+  const [history,setHistory]= useState([]);
+  const [power,  setPower]  = useState(2);
+  const [det,    setDet]    = useState(null);
+  const [stats,  setStats]  = useState({rank:null,trace:null});
+  const [rrSteps,setRrSteps]= useState(null);
+  const [rrIdx,  setRrIdx]  = useState(0);
+  const [flipping,setFlipping]=useState(false);
+
+  const sq = matA.length === matA[0]?.length;
+  const singular = det !== null && Math.abs(det) < 1e-10;
+
+  useEffect(()=>{
+    (async()=>{
+      const J = JSON.stringify(matA.map(r=>r.map(Number)));
+      if (sq) {
+        const [d,t,r] = await Promise.all([
+          api('determinant',J), api('trace',J), api('rank',J)
+        ]);
+        setDet(d.ok ? d.value : null);
+        setStats({ rank: r.ok?r.value:null, trace: t.ok?t.value:null });
+      } else {
+        const r = await api('rank', J);
+        setDet(null);
+        setStats({ rank: r.ok?r.value:null, trace: null });
+      }
+    })();
+  }, [matA]);
+
+  const push = (label, res) => {
+    const preview = res.matrix
+      ? res.matrix[0].slice(0,3).map(fmt).join('  ')+(res.matrix[0].length>3?' …':'')
+      : String(res.value??'');
+    setHistory(h=>[{id:Date.now(),op:label,preview,data:res,mat:clone(matA)},...h.slice(0,39)]);
+  };
+
+  const run = async (method, label, ...extra) => {
+    setLoading(true); setResult(null);
+    const J = JSON.stringify(matA.map(r=>r.map(Number)));
+    const res = await api(method, J, ...extra);
+    setResult({...res, label});
+    if (res.ok) push(label,res);
+    setLoading(false);
+  };
+
+  const runBin = async (method, label) => {
+    setLoading(true); setResult(null);
+    const JA = JSON.stringify(matA.map(r=>r.map(Number)));
+    const JB = JSON.stringify(matB.map(r=>r.map(Number)));
+    const res = await api(method, JA, JB);
+    setResult({...res,label});
+    if (res.ok) push(label,res);
+    setLoading(false);
+  };
+
+  const runTranspose = async () => {
+    setFlipping(true);
+    await new Promise(r=>setTimeout(r,280));
+    const J = JSON.stringify(matA.map(r=>r.map(Number)));
+    const res = await api('transpose', J);
+    setResult({...res,label:'Transpose Aᵀ'});
+    if (res.ok) push('Transpose Aᵀ',res);
+    setTimeout(()=>setFlipping(false),350);
+  };
+
+  const runPow = async n => {
+    const J = JSON.stringify(matA.map(r=>r.map(Number)));
+    const res = await api('power', J, n);
+    setResult({...res,label:`Power A^${n}`});
+  };
+
+  const runRR = async () => {
+    setLoading(true);
+    const J = JSON.stringify(matA.map(r=>r.map(Number)));
+    const res = await api('row_reduce', J);
+    if (res.ok) { setRrSteps(res.steps); setRrIdx(0); setResult({ok:true,label:'RREF Result',matrix:res.final}); }
+    else setResult({...res,label:'Row Reduce'});
+    setLoading(false);
+  };
+
+  return (
+    <div id="app">
+      {/* Header */}
+      <header>
+        <div>
+          <div className="logo">MTR<span>X</span></div>
+        </div>
+        <span className="logo-tagline">Matrix Calculator v2</span>
+        <div className="nav-divider"/>
+        <div className="nav-tabs">
+          {[['single','SINGLE A'],['dual','DUAL A⊕B'],['reduce','ROW REDUCE']].map(([v,l])=>(
+            <button key={v} className={`nav-tab ${tab===v?'active':''}`} onClick={()=>setTab(v)}>{l}</button>
+          ))}
+        </div>
+        <div className="header-right">
+          <button className={`pill-btn ${heatmap?'active':''}`} onClick={()=>setHeatmap(h=>!h)}>
+            {heatmap?'HEAT ON':'HEATMAP'}
+          </button>
+        </div>
+      </header>
+
+      {/* Main */}
+      <main>
+
+        {/* Matrix A */}
+        <div className="card">
+          <div className="card-label">Input Matrix</div>
+          <div className="flip-scene">
+            <div className={`flip-card ${flipping?'flipped':''}`}>
+              <MatrixGrid mat={matA} setMat={setMatA} label="A" heatmap={heatmap} />
+            </div>
+          </div>
+          <div className="stats-strip">
+            {sq && (
+              <div className={`stat-chip ${singular?'singular':''}`}>
+                <span className="stat-label">DET</span>
+                <span className="stat-val">{det!==null?fmt(det):'—'}</span>
+              </div>
+            )}
+            {stats.rank!==null && (
+              <div className="stat-chip">
+                <span className="stat-label">RANK</span>
+                <span className="stat-val">{stats.rank}</span>
+              </div>
+            )}
+            {stats.trace!==null && (
+              <div className="stat-chip">
+                <span className="stat-label">TR</span>
+                <span className="stat-val">{fmt(stats.trace)}</span>
+              </div>
+            )}
+            <div className="stat-chip">
+              <span className="stat-label">SIZE</span>
+              <span className="stat-val">{matA.length}×{matA[0]?.length}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Matrix B (dual tab) */}
+        {tab==='dual' && (
+          <div className="card">
+            <div className="card-label">Input Matrix B</div>
+            <MatrixGrid mat={matB} setMat={setMatB} label="B" heatmap={heatmap} />
+          </div>
+        )}
+
+        {/* Operations */}
+        <div className="card">
+          <div className="card-label">Operations</div>
+          <div className="ops-section">
+
+            {tab==='single' && <>
+              <div>
+                <div className="ops-group-label" style={{marginBottom:8}}>Decompose</div>
+                <div className="ops-row">
+                  <button className="op-btn orange" onClick={runTranspose}><span>Transpose Aᵀ</span></button>
+                  <button className={`op-btn ${singular?'':'outline'}`}
+                    style={singular?{background:'#ef4444',borderColor:'#ef4444'}:{}}
+                    onClick={()=>run('inverse','Inverse A⁻¹')} disabled={!sq}>
+                    <span>{singular?'⚠ SINGULAR':'Inverse A⁻¹'}</span>
+                  </button>
+                  <button className="op-btn outline" onClick={()=>run('eigenvalues','Eigenvalues')} disabled={!sq}><span>Eigenvalues λ</span></button>
+                </div>
+              </div>
+              <div>
+                <div className="ops-group-label" style={{marginBottom:8}}>Scalars</div>
+                <div className="ops-row">
+                  <button className="op-btn ghost" onClick={()=>run('determinant','Determinant |A|')} disabled={!sq}><span>Determinant</span></button>
+                  <button className="op-btn ghost" onClick={()=>run('rank','Rank')}>                   <span>Rank</span></button>
+                  <button className="op-btn ghost" onClick={()=>run('trace','Trace')} disabled={!sq}>  <span>Trace</span></button>
+                </div>
+              </div>
+              <div>
+                <div className="ops-group-label" style={{marginBottom:10}}>Matrix Power A<sup>n</sup></div>
+                <div className="power-section">
+                  <input type="range" className="power-track" min={-5} max={10} value={power}
+                    onChange={e=>{setPower(+e.target.value);runPow(+e.target.value);}} disabled={!sq} />
+                  <div className="power-n">{power}</div>
+                  <button className="op-btn orange" onClick={()=>runPow(power)} disabled={!sq}><span>GO</span></button>
+                </div>
+              </div>
+            </>}
+
+            {tab==='dual' && (
+              <div className="ops-row">
+                <button className="op-btn orange"   onClick={()=>runBin('add','A + B')}       ><span>A + B</span></button>
+                <button className="op-btn outline"  onClick={()=>runBin('subtract','A − B')}  ><span>A − B</span></button>
+                <button className="op-btn outline"  onClick={()=>runBin('multiply','A × B')}  ><span>A × B</span></button>
+              </div>
+            )}
+
+            {tab==='reduce' && <>
+              <div className="ops-row">
+                <button className="op-btn orange" onClick={runRR}><span>▶ Run RREF</span></button>
+              </div>
+              {rrSteps && rrSteps.length>0 && (
+                <div>
+                  <div className="rr-controls" style={{marginBottom:10}}>
+                    <button className="icon-btn" onClick={()=>setRrIdx(i=>Math.max(0,i-1))}>‹</button>
+                    <span className="step-pill">STEP {rrIdx+1} / {rrSteps.length}</span>
+                    <button className="icon-btn" onClick={()=>setRrIdx(i=>Math.min(rrSteps.length-1,i+1))}>›</button>
+                    <span className="step-pill">{rrSteps[rrIdx]?.desc}</span>
+                    <button className="icon-btn" onClick={()=>setRrIdx(rrSteps.length-1)} title="Jump to end">»</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table className="result-mtx-table rr-table" style={{background:'var(--black)',borderRadius:4,padding:8}}>
+                      <tbody>
+                        {(rrSteps[rrIdx]?.matrix||[]).map((row,i)=>(
+                          <tr key={i}>{row.map((v,j)=>(
+                            <td key={j} className={
+                              rrSteps[rrIdx]?.op==='swap'&&rrSteps[rrIdx]?.rows?.includes(i)?'pivot':
+                              rrSteps[rrIdx]?.op==='elim'&&rrSteps[rrIdx]?.rows?.[0]===i?'tgt':''
+                            }>{fmt(v)}</td>
+                          ))}</tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>}
+          </div>
+        </div>
+
+        {/* Result */}
+        {(loading||result) && (
+          <div>
+            {loading
+              ? <div style={{display:'flex',alignItems:'center',gap:10,padding:'16px 0'}}>
+                  <span className="spin"/>
+                  <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text2)',letterSpacing:'0.12em'}}>COMPUTING…</span>
+                </div>
+              : <ResultDisplay res={result} />
+            }
+          </div>
+        )}
+      </main>
+
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-head">
+          <span>HISTORY</span>
+          {history.length>0 && (
+            <button className="pill-btn" style={{fontSize:10,padding:'4px 10px'}}
+              onClick={()=>setHistory([])}>CLEAR</button>
+          )}
+        </div>
+        <div className="sidebar-body">
+          {history.length===0 ? (
+            <div style={{padding:'28px 8px',textAlign:'center',fontFamily:'var(--mono)',fontSize:10,color:'var(--text3)',lineHeight:1.8,letterSpacing:'0.08em'}}>
+              RESULTS APPEAR<br/>AS CARDS HERE<br/><br/>
+              <span style={{color:'var(--orange)',opacity:0.5}}>CLICK TO RESTORE</span>
+            </div>
+          ) : history.map(item=>(
+            <div key={item.id} className="h-card"
+              onClick={()=>{ setMatA(item.mat); setResult({...item.data,label:item.op}); }}>
+              <div className="h-op">{item.op}</div>
+              <div className="h-pre">{item.preview}</div>
+              <div className="h-del" onClick={e=>{e.stopPropagation();setHistory(h=>h.filter(x=>x.id!==item.id))}}>✕</div>
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
